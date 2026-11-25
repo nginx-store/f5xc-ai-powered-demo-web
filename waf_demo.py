@@ -1207,7 +1207,6 @@ PAGE = r"""<!doctype html>
 <body>
 <header>
   <h1>F5 AI Risk Scoring Demo</h1>
-  <span class="subtitle">AI-Powered WAF vs Basic WAF — 10 real attacks + 10 attack-looking benign → TP·FN·FP·TN</span>
 </header>
 <div class="layout">
 <aside>
@@ -1215,30 +1214,14 @@ PAGE = r"""<!doctype html>
   <input id="base" type="url" value="http://ai-risk.nginxstore.co.kr" spellcheck="false">
   <label class="label" for="base2">Target B — Basic WAF (signature only) — blank for single target</label>
   <input id="base2" type="url" value="http://ai-defense.nginxstore.co.kr" spellcheck="false">
-  <div class="field-row">
-    <div><label class="label" for="delay">Delay between requests</label><input id="delay" type="number" value="0.2" min="0" max="3" step="0.1"></div>
-    <div><label class="label" for="timeout">Timeout</label><input id="timeout" type="number" value="8" min="1" max="30"></div>
-  </div>
   <label class="label">Run a scenario</label>
   <div class="button-list">
     <button class="primary" data-scenario="demo">▶ Run demo (20 requests)<span class="button-note">10 real attacks (verified SQLi dump / RCE / LFI / XSS / SSCI) + 10 benign requests that look like attacks — run on both LBs to compare AI vs Basic</span></button>
   </div>
-  <div class="note ai" style="margin-top:18px"><strong>AI evidence</strong><br>HTTP responses show F5 rejections and application results. They do not contain the AI classification or final risk level. Check F5 Security Events for <code>req_risk</code>, <code>req_risk_reasons</code>, signatures, and action.</div>
-  <div class="note warn"><strong>Feedback writes</strong><br>Benign reports use the app's feedback form and fetch a CAPTCHA first. Accepted feedback is stored on the target.</div>
 </aside>
 <main>
-  <div class="notes">
-    <div class="note"><strong>Demo:</strong> 10 real attacks (verified on live Juice Shop — SQLi login bypass, credential dump, schema dump, DOM XSS, path traversal) + 10 benign requests that look like attacks. Run against both targets to compare the AI-Powered WAF vs a signature-only Basic WAF.</div>
-  </div>
   <div id="verdict" class="verdict" style="display:none"></div>
   <div id="scoreboard" class="scoreboard"><div class="empty" style="grid-column:1/-1">Run the demo to compare AI-Powered WAF vs Basic WAF.</div></div>
-  <details class="event-import">
-    <summary>Attach F5 Security Events export (CSV / JSON / JSONL)</summary>
-    <p>Run a scenario, then import the matching export from the XC Security Events page. The app matches by time, method, path, and inspected payload where present. Unmatched events are not interpreted as AI passes.</p>
-    <input id="event-file" type="file" accept=".csv,.tsv,.json,.jsonl,text/csv,application/json">
-    <textarea id="event-text" placeholder="Choose an exported file or paste event JSON / CSV here"></textarea><br>
-    <button id="import-events">Attach events to the latest run</button><span id="event-status" class="event-status"></span>
-  </details>
   <div class="toolbar"><div><h2>Request results</h2><div id="run-status" class="status">No requests sent yet.</div></div><button id="download" disabled>Download JSONL</button></div>
   <div class="table-wrap"><table>
     <thead><tr><th>#</th><th>Target</th><th>Class</th><th>Method</th><th>Result</th><th>Time</th><th>Test</th><th>Request URL</th></tr></thead>
@@ -1299,10 +1282,10 @@ function wafPanel(t,m){
       '<div class="big"><div class="v '+(m.fp===0?'good':'bad')+'">'+m.fp+'/'+m.ben+'</div><div class="k">false blocks</div></div>'+
     '</div>'+
     '<div class="quad">'+
-      '<div class="tp"><b>'+m.tp+'</b>TP attacks blocked</div>'+
-      '<div class="fn"><b>'+m.fn+'</b>FN attacks missed</div>'+
-      '<div class="fp"><b>'+m.fp+'</b>FP benign blocked</div>'+
-      '<div class="tn"><b>'+m.tn+'</b>TN benign allowed</div>'+
+      '<div class="tp"><b>'+m.tp+'</b>Attacks blocked ✅</div>'+
+      '<div class="fn"><b>'+m.fn+'</b>Attacks let through ❌</div>'+
+      '<div class="fp"><b>'+m.fp+'</b>Safe requests blocked ❌</div>'+
+      '<div class="tn"><b>'+m.tn+'</b>Safe requests allowed ✅</div>'+
     '</div></div>';
 }
 function refreshCounts(rows){
@@ -1347,7 +1330,7 @@ async function runScenario(scenario,button){
   $('rows').innerHTML='<tr><td colspan="8" class="empty">Requests in progress…</td></tr>';
   try{
     const response=await fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({base:$('base').value,base2:t2,scenario:scenario,delay:Number($('delay').value),timeout:Number($('timeout').value)})});
+      body:JSON.stringify({base:$('base').value,base2:t2,scenario:scenario})});
     const data=await response.json(); if(!response.ok||data.error) throw new Error(data.error||response.statusText);
     latestRows=data.rows||[]; renderRows();
     const per=(data.targets||[]).map(t=>{const g=latestRows.filter(r=>r.target===t);const b=g.filter(r=>r.outcome==='waf_blocked').length;let h='';try{h=new URL(t).host;}catch(e){h=t;}const kind=/ai-risk/.test(t)?' (AI)':(/ai-defense/.test(t)?' (Basic)':'');return h+kind+': '+b+'/'+g.length+' blocked';}).join('  ·  ');
@@ -1357,23 +1340,6 @@ async function runScenario(scenario,button){
     $('run-status').textContent='Run failed'; $('rows').innerHTML='<tr><td colspan="8" class="empty">'+esc(error.message)+'</td></tr>';
   }finally{buttons.forEach(b=>b.disabled=false);button.innerHTML=old;}
 }
-document.getElementById('event-file').addEventListener('change',async event=>{
-  const file=event.target.files[0]; if(!file) return;
-  if(file.size>5242880){$('event-status').textContent='File exceeds 5 MB.';return;}
-  $('event-text').value=await file.text(); $('event-status').textContent=file.name+' loaded';
-});
-document.getElementById('import-events').addEventListener('click',async()=>{
-  if(!latestRows.length){$('event-status').textContent='Run a scenario first.';return;}
-  const button=$('import-events'); button.disabled=true; $('event-status').textContent='Reading events…';
-  try{
-    const response=await fetch('/api/import-events',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({text:$('event-text').value,rows:latestRows})});
-    const data=await response.json(); if(!response.ok||data.error) throw new Error(data.error||response.statusText);
-    latestRows=data.rows; renderRows();
-    $('event-status').textContent=data.events+' events parsed · '+data.rows_matched+' request rows matched';
-  }catch(error){$('event-status').textContent=error.message;}
-  finally{button.disabled=false;}
-});
 document.querySelectorAll('button[data-scenario]').forEach(button=>button.addEventListener('click',()=>runScenario(button.dataset.scenario,button)));
 $('download').addEventListener('click',()=>{
   const blob=new Blob([latestRows.map(row=>JSON.stringify(row)).join('\n')+'\n'],{type:'application/x-ndjson'});
