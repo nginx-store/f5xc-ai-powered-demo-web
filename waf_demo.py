@@ -196,7 +196,7 @@ MEDIUM = [
             kind="no_sink_probe", risk="medium"),
     Pattern("attack", "med_backup_zip", "GET", "/backup.zip",
             note="Medium-risk predictable-resource candidate; read req_risk in F5 event.",
-            kind="no_sink_probe", risk="medium"),
+^[[3~            kind="no_sink_probe", risk="medium"),
     Pattern("attack", "med_db_sql", "GET", "/db.sql",
             note="Medium-risk predictable-resource candidate; read req_risk in F5 event.",
             kind="no_sink_probe", risk="medium"),
@@ -1335,7 +1335,6 @@ async function runScenario(scenario,button){
     latestRows=data.rows||[]; renderRows();
     const per=(data.targets||[]).map(t=>{const g=latestRows.filter(r=>r.target===t);const b=g.filter(r=>r.outcome==='waf_blocked').length;let h='';try{h=new URL(t).host;}catch(e){h=t;}const kind=/ai-risk/.test(t)?' (AI)':(/ai-defense/.test(t)?' (Basic)':'');return h+kind+': '+b+'/'+g.length+' blocked';}).join('  ·  ');
     $('run-status').textContent=latestRows.length+' requests · '+per+' · '+new Date().toLocaleTimeString();
-    $('event-status').textContent='';
   }catch(error){
     $('run-status').textContent='Run failed'; $('rows').innerHTML='<tr><td colspan="8" class="empty">'+esc(error.message)+'</td></tr>';
   }finally{buttons.forEach(b=>b.disabled=false);button.innerHTML=old;}
